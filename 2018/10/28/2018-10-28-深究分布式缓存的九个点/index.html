@@ -1,0 +1,176 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta name="generator" content="Hexo 3.8.0"><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="本站是杨帮主的技术分享博客。内容涵盖生活故事、Java后端技术、Spring Boot、Spring Cloud、微服务架构、大数据演进、高可用架构、中间件使用、系统监控等相关的研究与知识分享。"><title>深究分布式缓存的几个点 | 鹏兵的技术点滴</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/8.0.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/1.0.0/grids-responsive-min.css"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-127798542-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = 'https://hm.baidu.com/hm.js?' + '1b4131b600d79008de63bf372b248775';
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+  </script></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">深究分布式缓存的几个点</h1><a id="logo" href="/.">鹏兵的技术点滴</a><p class="description">杨帮主的博客 | 鹏兵的技术点滴</p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/history/"><i class="fa fa-book"> 历史</i></a><a href="/guestbook/"><i class="fa fa-comments"> 留言</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">深究分布式缓存的几个点</h1><div class="post-meta">Oct 28, 2018<span> | </span><span class="category"><a href="/categories/redis/">redis</a></span><script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> 阅读</span></span><span class="post-time"><span class="post-meta-item-text"> | </span><span class="post-meta-item-icon"><i class="fa fa-keyboard-o"></i><span class="post-count"> 3.9k</span><span class="post-meta-item-text"> 字</span></span></span><span class="post-time"> | <span class="post-meta-item-icon"><i class="fa fa-hourglass-half"></i><span class="post-count"> 14</span><span class="post-meta-item-text"> 分钟</span></span></span></div><div class="clear"><div class="toc-article" id="toc"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#redis简介"><span class="toc-number">1.</span> <span class="toc-text">redis简介</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#为什么要用redis和为什么要用缓存"><span class="toc-number">2.</span> <span class="toc-text">为什么要用redis和为什么要用缓存</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#为什么要用redis而不用map或者guava做缓存？"><span class="toc-number">3.</span> <span class="toc-text">为什么要用redis而不用map或者guava做缓存？</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#redis和memcached的区别"><span class="toc-number">4.</span> <span class="toc-text">redis和memcached的区别</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#redis常见数据结构已经使用场景分析"><span class="toc-number">5.</span> <span class="toc-text">redis常见数据结构已经使用场景分析</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#redis设置过期"><span class="toc-number">6.</span> <span class="toc-text">redis设置过期</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#redis内存淘汰机制"><span class="toc-number">7.</span> <span class="toc-text">redis内存淘汰机制</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#redis持久化机制"><span class="toc-number">8.</span> <span class="toc-text">redis持久化机制</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#缓存雪崩和缓存穿透问题解决方案"><span class="toc-number">9.</span> <span class="toc-text">缓存雪崩和缓存穿透问题解决方案</span></a></li></ol></div></div><div class="post-content"><h1 id="redis简介"><a href="#redis简介" class="headerlink" title="redis简介"></a>redis简介</h1><p>redis是一个开源(BSD许可)的，内存中的数据结构存储系统，它可以用作数据库，缓存和消息中间件，它支持多种类型是数据结构，如字符串(String)，散列(hashes), 列表(lists), 集合(sets)，有序集合(sorted sets)与范围查询，bitmaps，hyperloglogs，和地理空间(geospatial) 索引半径查询。redis内置了复制(replication), lua脚本(lua scripting)，LRU驱动事件(LRU action), 事务(transactions) 和不同级别的磁盘持久化(persistence)，并通过redis哨兵(Sentinel)和自动分区(Cluster)提供了高可用性(high availability)。</p>
+<h1 id="为什么要用redis和为什么要用缓存"><a href="#为什么要用redis和为什么要用缓存" class="headerlink" title="为什么要用redis和为什么要用缓存"></a>为什么要用redis和为什么要用缓存</h1><p>主要从高性能和高并发这两点来看待这个问题。</p>
+<p><strong>高性能</strong></p>
+<p>假如用户第一个访问数据库中的某些数据，这个过程比较慢，因为是从磁盘上读取的，将该用户访问的数据存在缓存中，这样下次在访问这些数据的时候，就可以直接从内存中读取，操作缓存就是直接操作内存，所以速度相当快，如果数据库中的对应数据改变之后，同步改变缓存中相应的数据即可。</p>
+<p><img src="http://upload-images.jianshu.io/upload_images/14423059-12d1bb7c0057378f?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt=""></p>
+<p><strong>高并发</strong></p>
+<p>直接操作缓存能够承受的请求是远远大于直接访问数据库的，所以我们可以考虑把数据库中部分数据转移到缓存中去，这样用户的一部分请求会直接到缓存中读取，而不用经过数据库。</p>
+<p><img src="http://upload-images.jianshu.io/upload_images/14423059-6cc3faccef5cc999?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt=""></p>
+<h1 id="为什么要用redis而不用map或者guava做缓存？"><a href="#为什么要用redis而不用map或者guava做缓存？" class="headerlink" title="为什么要用redis而不用map或者guava做缓存？"></a>为什么要用redis而不用map或者guava做缓存？</h1><p>缓存分本地缓存和分布式缓存，以java为例，使用自带的map或者guava实现的本地缓存，最主要的特点就是轻量以及快速，生命周期随着JVM的销毁而结束，并且在多实例的情况下，每个实例都需要各自存一份缓存，缓存不具有一致性。</p>
+<p>使用redis或memcached之类的缓存称为分布式缓存，在多实例的情况下，各实例共用一份缓存，缓存具有一致性，缺点是需要保持redis或者memcached服务的高可用，整个程序架构上较为复杂。</p>
+<h1 id="redis和memcached的区别"><a href="#redis和memcached的区别" class="headerlink" title="redis和memcached的区别"></a>redis和memcached的区别</h1><p>对于redis和memcached总结了下面四点。目前公司大部分使用的都是redis来实现缓存，而且redis自身也越来越强大起来。</p>
+<ol>
+<li>redis支持更加丰富的数据结构(支持更复杂的应用场景)：redis不仅仅支持简单的k/v类型的数据，同时还提供了list, set, zset, hash等数据结构的存储，memcached仅支持简单的数据类型String。</li>
+<li>redis支持数据的持久化，可以将内存中的数据保存到磁盘中，重启的时候可以再次加载进行使用，而memcached把数据全部存在内存中。</li>
+<li>集群模式：memcached没有原生的的集群模式，需要依靠客户端来实现往集群中分片写入数据，但是redis目前是原生支持cluster模式的，redis官方就是支持redis cluster集群模式的，比memcached来说要好。</li>
+<li>memcached是多线程的，非阻塞IO复用的网络模型，redis是单线程的多路IO复用模型。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>对比参数</th>
+<th>redis</th>
+<th>memcached </th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>类型</td>
+<td>1.支持内存 <br> 2. 非关系型数据库</td>
+<td>1. 支持内存 <br> 2. key-value键值对形式 <br> 3. 缓存系统 </td>
+</tr>
+<tr>
+<td>数据存储类型</td>
+<td>1. String <br> 2. List <br> 3. Set <br> 4. Hash <br> 5.Sorted Set 【俗称Zset】</td>
+<td>1. 文本型 <br> 2. 二进制类型(新版增加) </td>
+</tr>
+<tr>
+<td>查询【操作】类型</td>
+<td>1. 批量操作 <br> 2. 事务支持 <br> 3. 每个类型不同的CRUD</td>
+<td>1. CRUD <br> 2. 少量的其他命令 </td>
+</tr>
+<tr>
+<td>附件功能</td>
+<td>1. 发布/订阅模式 <br> 2. 主从模式 <br> 3. 序列化支持 <br> 4. 脚本支持【Lua脚本】</td>
+<td>多线程服务支持</td>
+</tr>
+<tr>
+<td>网络IO模型</td>
+<td>单线程模式</td>
+<td>多线程非阻塞IO模式</td>
+</tr>
+<tr>
+<td>事件库</td>
+<td>自封装简易事件库AeEvent</td>
+<td>贵族血统的LibEvent事件库</td>
+</tr>
+<tr>
+<td>持久化</td>
+<td>1. RDB <br> 2. AOF</td>
+<td>不支持</td>
+</tr>
+</tbody>
+</table>
+<h1 id="redis常见数据结构已经使用场景分析"><a href="#redis常见数据结构已经使用场景分析" class="headerlink" title="redis常见数据结构已经使用场景分析"></a>redis常见数据结构已经使用场景分析</h1><ol>
+<li>String<blockquote>
+<p>常用命令: set, get, decr, incr, mget等.</p>
+</blockquote>
+</li>
+</ol>
+<p>String数据结构是最简单的key-value类型, value其实不仅仅可以是String, 也可以是数字,常规key-value缓存应用; 常规计数: 微博数, 粉丝数等.</p>
+<ol start="2">
+<li>Hash<blockquote>
+<p>常用命令: hget, hset, hgetall等.</p>
+</blockquote>
+</li>
+</ol>
+<p>Hash是一个String类型的field和value的映射表, hash特别适合用于存储对象, 后续操作的时候, 你可以直接仅仅修改这个对象中的某个字段的值. 比如我们可以使用Hash数据结构来存储用户信息, 商品信息等等. 比如下面我们就用hash类型存放我本人的一些信息:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">key=happy518</span><br><span class="line">value=&#123;</span><br><span class="line">    &quot;id&quot;: 1,</span><br><span class="line">    &quot;name&quot;: &quot;happy518&quot;,</span><br><span class="line">    &quot;age&quot;: 29,</span><br><span class="line">    &quot;location&quot;: &quot;beijing&quot;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<ol start="3">
+<li>List<blockquote>
+<p>常用命令: lpush, rpush, lpop, rpop, lrange等</p>
+</blockquote>
+</li>
+</ol>
+<p>list就是链表, redis list的应用场景非常多, 也是redis最重要的数据结构之一, 比如微博的关注列表, 粉丝列表, 消息列表等功能都可以用redis的list结构来实现.</p>
+<p>redis list的实现是一个双向链表, 既可以支持反向查询和遍历, 更方便操作, 不过带来了部分额外的内存开销.</p>
+<p>另外可以通过lrange命令, 就是从某个元素开始读取多个元素, 可以基于list实现分页查询, 这是一个很棒的功能, 基于redis实现简单的高性能分页, 可以做到类似微博那种下拉不断分页的东西(一页一页的往下走), 性能高.</p>
+<ol start="4">
+<li>Set<blockquote>
+<p>常用命令: sadd, spop, smembers, sunion等.</p>
+</blockquote>
+</li>
+</ol>
+<p>set对外提供的功能与list类似是一个列表的功能, 特殊之处在于set是可以自动排重的.</p>
+<p>当你需要存储一个列表数据, 又不希望出现重复数据时, set是一个很好的选择, 并且set提供了判断某个成员是否在一个set集合内的重要接口, 这也是list所不能提供的, 可以基于set轻易实现交集, 并集, 差集的操作.</p>
+<p>比如: 在微博应用中, 可以将一个用户所有的关注人存在一个集合中, 将其所有粉丝存在一个集合, redis可以非常方便的实现如同关注, 共同粉丝, 共同喜好等功能, 这个过程就是求交集的过程, 具体命令如下:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sinterstore key1 key2 key3 // 将交集存在key1内</span><br></pre></td></tr></table></figure></p>
+<ol start="5">
+<li>Sorted Set<blockquote>
+<p>常用命令: zadd, zrange, zrem, zcard等.</p>
+</blockquote>
+</li>
+</ol>
+<p>和set相比, sorted set增加了y一个权重参数score, 使得集合中的元素能够按照score进行有序排列. </p>
+<p>比如: 在直播系统中, 实时排行信息包含直播间在线用户列表, 各种礼物排行榜, 弹幕消息(可以理解为按消息维度的消息排行榜)等信息, 适合使用redis中的sorted set结构进行存储.</p>
+<h1 id="redis设置过期"><a href="#redis设置过期" class="headerlink" title="redis设置过期"></a>redis设置过期</h1><p>redis中有个设置时间过期的功能, 即对存储在redis数据库中的值可以设置一个过期时间.<br>作为一个缓存数据库, 这是非常实用的, 如我们一般项目中的token或者一些登录信息, 尤其是短信验证码都是有时间限制的, 按照传统的数据库处理方式, 一般都是自己判断过期, 这样无疑会严重影响项目性能.</p>
+<p>我们set key的时候, 都可以给一个expire time, 就是过期时间, 通过过期时间我们可以指定这个key可以存活的时间.</p>
+<p>如果假设你设置了一个一批key只能存活1小时, 那么接下来1小时后, redis是怎么对这批key进行删除的?</p>
+<p><strong>定期删除+惰性删除</strong></p>
+<p>通过名字大概就能猜出这两个删除方式的意思了.</p>
+<ul>
+<li>定时删除: </li>
+</ul>
+<p>redis默认是每隔100ms就随机抽取一些设置了过期时间的key, 检查其是否过期, 如果过期就删除, 注意这里是随机抽取的, 为什么要随机呢? 你想一想假设redis存了十几万个key, 每隔100ms就遍历所有设置过期时间的key的话, 就会给cpu带来很大的负载.</p>
+<ul>
+<li>惰性删除:</li>
+</ul>
+<p>定期删除可能会导致很多过期key到了时间并没有被删除掉. 所以就有了惰性删除, 假如你的过期key, 靠定期删除没有被删除掉, 还停留在内存里, 除非你的系统去查一下那个key, 才会被redis给删除掉. 这就是所谓的惰性删除.</p>
+<p>但是仅仅通过设置过期时间还是有问题的, 我们想一下: 如果定期删除溜掉了很多过期的key, 然后你也没有及时去查, 也就没走惰性删除, 此时会怎么样? 如果大量过期key堆积在内存里, 导致redis内存快耗尽了, 怎么解决了这个问题? redis内存淘汰机制.</p>
+<h1 id="redis内存淘汰机制"><a href="#redis内存淘汰机制" class="headerlink" title="redis内存淘汰机制"></a>redis内存淘汰机制</h1><p>(msql里面有2000w数据, redis中只存20w的数据, 如何保证redis中的数据都是热点数据?)</p>
+<p><strong>redis提供6种数据淘汰策略</strong></p>
+<ol>
+<li>volatile-lru: 从已设置过期时间的数据集(server.db[i].expires)中挑选最近最少使用的数据淘汰.</li>
+<li>volatile-ttl: 从已设置过期时间的数据集(server.db[i].expires)中挑选将要过期的数据淘汰.</li>
+<li>volatile-random: 从已设置过期时间的数据集(server.db[i].expires)中任意选择数据淘汰.</li>
+<li>allkeys-lru: 当内存不足以容纳新写入数据时, 在健空间中, 移除最近最少使用的key(这个是最常用的).</li>
+<li>allkeys-random: 从数据集(server.db[i].dict)中任意选择数据淘汰.</li>
+<li>no-enviction: 禁止驱逐数据, 也就是说当内存不足以容纳新写入数据时, 新写入操作会报错.</li>
+</ol>
+<h1 id="redis持久化机制"><a href="#redis持久化机制" class="headerlink" title="redis持久化机制"></a>redis持久化机制</h1><p>(怎么保证redis挂掉之后在重启数据可以进行恢复)</p>
+<p>很多时候我们需要持久化数据也就是将内存中的数据写入到硬盘里面, 大部分原因是为了之后重用数据(比如重启机器, 机器故障之后回复数据), 或者是为了防止系统故障而将数据备份到一个远程位置.</p>
+<p>redis不同与Memcached的很重一点就是, redis支持持久化, 而且支持两种不同的持久化策略,<br>redis的一种持久化方式叫做快照(snapshotting, RDB), 另一种方式是只追加文件(append-only file, AOF), 这两种方法各有千秋, 下面详细介绍这两种持久化方式是什么, 怎么用. 如果选择适合自己的持久化方式.</p>
+<p><strong>快照(snapshotting)持久化 RDB</strong></p>
+<p>redis可以通过创建快照来获得存储在内存里面的数据在某个时间点上的副本, redis创建快照之后, 可以对快照进行备份, 可以将快照复制到其他服务器从而创建具有相同数据的服务器副本(redis主从结构, 主要用来提高redis性能), 还可以将快照留在原地以便重启服务器的时候使用.</p>
+<p>快照持久化是redis默认采用的持久化方式, 在redis.conf配置文件中默认有如下配置<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"># 在900秒(15分钟)之后, 如果至少有1个key发生变化, redis就会自动触发BGSAVE命令创建快照.</span><br><span class="line">save 900 1 </span><br><span class="line"></span><br><span class="line"># 在300秒(5分钟)之后, 如果至少有10个key发生变化, redis就会自动触发BGSAVE命令创建快照.</span><br><span class="line">save 300 10</span><br><span class="line"></span><br><span class="line"># 在60秒(1分钟)之后, 如果至少有10000个key发生变化, redis就会自动出发BGSAVE命令创建快照</span><br><span class="line">save 60 10000</span><br></pre></td></tr></table></figure></p>
+<p><strong>AOF(append-only file)持久化</strong></p>
+<p>与快照持久化相比, AOF持久化的实时性更好, 因此已成为主流的持久化方案, 默认情况下redis是没有开启aof方式的持久化, 可以通过appendonly参数开启:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">appendonly yes</span><br></pre></td></tr></table></figure></p>
+<p>开启AOF持久化后每一条会更改redis中数据的命令, redis就会将该命令写入磁盘中的AOF文件. aof文件的保持位置和rdb文件的位置相同, 都是通过dir参数设置的, 默认的文件名是appendonly.aof.</p>
+<p>在redis的配置文件中存在三种不同的AOF持久化方式, 它们分别是:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"># 每次有数据修改时都会写入AOF文件, 这样会严重降低redis的速度</span><br><span class="line">appendfsync always</span><br><span class="line"></span><br><span class="line"># 每秒同步一次, 显示地将多个写命令同步到磁盘</span><br><span class="line">appendfsync everysec</span><br><span class="line"></span><br><span class="line"># 让操作系统决定何时同步</span><br><span class="line">appendfsync no</span><br></pre></td></tr></table></figure></p>
+<p>为了兼顾数据和写入性能, 用户可以考虑appendfsync everysec选项, 让redis每秒同步一次aof文件, redis性能几乎没收到任何影响, 而且这样即使出现系统崩溃, 用户最多只丢失一秒之内产生的数据, 当磁盘忙于执行写入操作的时候, redis还会优雅的放慢自己的速度以便适应磁盘的最大写入速度.</p>
+<p><strong>补充内容: AOF重写</strong></p>
+<p>AOF重写可以产生一个新的AOF文件, 这个新的AOF文件和原有的AOF文件所保存的数据库状态一样, 但体谅更小.</p>
+<p>AOF重写是一个有歧义的名字, 该功能是通过读取数据库中的键值对来实现的, 程序无须对现有AOF文件进行任何读入, 分析或者写入操作.</p>
+<p>在执行BGREWRITEAOF命令时, redis服务器会维护一个AOF重写缓冲区, 该缓冲区会在子进程创建新AOF文件期间, 记录服务器执行的所有写命令, 当子进程完成创建新AOF文件的工作之后, 服务器会将重写缓冲区中的所有内容追加到新的AOF文件的末尾, 使得新旧两个AOF文件所保持的数据库状态一致, 最后, 服务器用新的AOF文件替换旧的AOF文件, 以此来完成AOF文件重写操作.</p>
+<h1 id="缓存雪崩和缓存穿透问题解决方案"><a href="#缓存雪崩和缓存穿透问题解决方案" class="headerlink" title="缓存雪崩和缓存穿透问题解决方案"></a>缓存雪崩和缓存穿透问题解决方案</h1><p><strong>缓存雪崩</strong></p>
+<p>简介: 缓存同一时间大面积的失效, 所以, 后面的请求都会落到数据库上, 造成数据库短时间内承受大量请求而崩掉.</p>
+<p>解决办法:</p>
+<ul>
+<li>事前: 尽量保证整个redis集群的高可用性, 发现机器宕机尽快补上, 选择h合适的内存淘汰策略.</li>
+<li>事中: 本地ehcache缓存 + hystrix限流和降级, 避免Mysql崩掉.</li>
+<li>事后: 利用redis持久化机制保存的数据尽快恢复缓存.<br><img src="http://upload-images.jianshu.io/upload_images/14423059-f22d4aefeec2ca87?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt=""></li>
+</ul>
+<p><strong>缓存穿透</strong></p>
+<p>简介: 一般是黑客故意去请求缓存中不存在的数据, 导致所有的请求都落到数据库上, 造成数据库短时间内承受大量请求而崩掉.</p>
+<p>解决办法: 有很多方法可以有效的解决缓存穿透问题, 最常见的则是采用布隆过滤器, 将所有可能存在的数据哈希到一个足够大的bitmap中, 一个一定不存在的数据会被这个bitmap拦截掉, 从而避免了对底层存储系统的查询压力, 另外也有一个更为简单粗暴的方法, 如果一个查询返回的数据结果为空, 不管是数据不存在, 还是系统故障, 我们仍然把这个空结果进行缓存, 但是它的过期时间会很短, 最长不超过5分钟.</p>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a class="article-share-link" data-url="http://happy518.top/2018/10/28/2018-10-28-深究分布式缓存的九个点/" data-id="cjo4d8nsb0010usupaazsfk83" data-qrcode="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAN4AAADeCAAAAAB3DOFrAAACsElEQVR42u3aMW7DMBAEQP//006TLrC0eyQdFaPKCGKJwwC6yx5fr/h6/7mufyf5yaf7tM/dcOHh4eEtLz1faMv49Pl6bddPvNkCPDw8vGO82a2Tl3jyWs+3OF8zHh4e3pN5s1d/3i5fPxEPDw/v+byk/Z2VlnwL8PDw8J7Aa9vZ68a6Xej10pOwY0PWgoeHhxfz8inScz4fme/h4eHhLU/V83Y2f02395yt8/e7eHh4eAd4bdCQD7eSxa1vVhL44uHh4Z3j5XFDEj3UYWs8WqtDZzw8PLytvLapXVl08pSVkOJmsoeHh4e3lZc3xG2c2rbgbRt9szY8PDy8A7z1IjF8WBBSzIpQPcHDw8PDG/HyI01J8JrEGUmssHL8q85a8PDw8EpeHt22we6spW6LSrR+PDw8vE289gXdBg35gYN2kBbdDQ8PD++LvPXwNG+IV2KLm0KFh4eHd4C3NxqYxcT5EK4tSHh4eHineXnBmDXTu0pCHp3g4eHhneDtPQ41ix5mxwWiIwV4eHh4x3h5DclDgXyJ69SPJQ0PDw/vAK99Tc82og1wZ0UlCiPw8PDwlnlJgNsWhjaubdvl4qADHh4e3jHe3tZ5pUHPR2h4eHh4/8vLGclLPxmn7dq4aACGh4eHt5U3a6DbJSYbsY6/abvx8PDwtvLyYwGz0dR62LHUvuPh4eF9hbeLMYsbVrb4Y8XDw8PDO8Zrj0zlA6pdx7bqjcbDw8PbynuXV74d7R3yY1v5AQI8PDy8E7z8ykdc11VoNlrLD2a1RQUPDw9vxts1yJ+N/NvWuQ1N8PDw8M7x8uihLRInGu4insDDw8N7DG+G2RUNFyEFHh4e3mN47aBr5UjB0nfx8PDwjvFmbW7+4m6D3fU/Ax4eHt45XvvvfRvdtocD8o3bduHh4eGlvB+1hQMnoC87zAAAAABJRU5ErkJggg==">分享</a><div class="tags"><a href="/tags/redis/">redis</a></div><div class="post-nav"><a class="pre" href="/2018/10/29/2018-10-29-短小精悍之 Redis 命令行工具有趣的罕见用法/">redis命令行工具有趣的罕见用法</a><a class="next" href="/2018/10/21/2018-10-21-jdk8的optional深入详解/">jdk8的optional深入详解</a></div><div id="container"></div><link rel="stylesheet" type="text/css" href="//unpkg.com/gitalk/dist/gitalk.css?v=0.0.0"><script type="text/javascript" src="//cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.js?v=0.0.0"></script><script type="text/javascript" src="//unpkg.com/gitalk/dist/gitalk.min.js?v=0.0.0"></script><script>var gitalk = new Gitalk({
+  clientID: 'b53d968c6631f4f3eb92',
+  clientSecret: '0d39284d99a19e550c327f35f809793bea719899',
+  repo: '',
+  owner: 'happy518',
+  admin: ['happy518'],
+  id: md5(location.pathname),
+  distractionFreeMode: false
+})
+gitalk.render('container')
+</script></div></div></div><div class="pure-u-1 pure-u-md-1-4"><div id="sidebar"><div class="widget"><form class="search-form" action="//www.baidu.com/baidu" method="get" accept-charset="utf-8" target="_blank"><input type="search" name="word" maxlength="20" placeholder="Search"><input type="hidden" name="si" value="http://happy518.top"><input name="tn" type="hidden" value="bds"><input name="cl" type="hidden" value="3"><input name="ct" type="hidden" value="2097152"><input name="s" type="hidden" value="on"></form></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/git/">git</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/jdk8/">jdk8</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/redis/">redis</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/性能/">性能</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/漫谈/">漫谈</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/设计模式/">设计模式</a><span class="category-list-count">1</span></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/Blog/" style="font-size: 15px;">Blog</a> <a href="/tags/redis/" style="font-size: 15px;">redis</a> <a href="/tags/博客/" style="font-size: 15px;">博客</a> <a href="/tags/漫谈/" style="font-size: 15px;">漫谈</a> <a href="/tags/other/" style="font-size: 15px;">other</a> <a href="/tags/OOAD/" style="font-size: 15px;">OOAD</a> <a href="/tags/Git/" style="font-size: 15px;">Git</a> <a href="/tags/Github/" style="font-size: 15px;">Github</a> <a href="/tags/生活/" style="font-size: 15px;">生活</a> <a href="/tags/jdk8/" style="font-size: 15px;">jdk8</a> <a href="/tags/lamdaba/" style="font-size: 15px;">lamdaba</a> <a href="/tags/源码/" style="font-size: 15px;">源码</a> <a href="/tags/函数式接口/" style="font-size: 15px;">函数式接口</a> <a href="/tags/stream/" style="font-size: 15px;">stream</a> <a href="/tags/optional/" style="font-size: 15px;">optional</a> <a href="/tags/性能/" style="font-size: 15px;">性能</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2018/10/30/2018-10-30-常用性能监控指南/">常用性能监控指南</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/29/2018-10-29-短小精悍之 Redis 命令行工具有趣的罕见用法/">redis命令行工具有趣的罕见用法</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/28/2018-10-28-深究分布式缓存的九个点/">深究分布式缓存的几个点</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/21/2018-10-21-jdk8的optional深入详解/">jdk8的optional深入详解</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/09/27/2018-09-27-jdk8Stream流详解/">jdk8方法引用详解</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/09/26/2018-09-26-jdk8函数式接口/">jdk8函数式接口学习总结</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/09/25/2018-09-25-jdk8学习笔记/">jdk8学习总结</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/12/19/2017-12-19-为博客添加-Gitalk-评论插件/">为博客添加 Gitalk 评论插件</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/02/22/2017-02-22-使用-.gitignore-忽略-git-仓库中的文件/">使用 .gitignore 忽略 Git 仓库中的文件</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/02/16/2017-02-16-Git-代码回滚/">Git 代码回滚</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="https://github.com/happy518" title="my github" target="_blank">my github</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2018 <a href="/." rel="nofollow">鹏兵的技术点滴.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//cdn.bootcss.com/fancybox/3.3.5/jquery.fancybox.min.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/fancybox/3.3.5/jquery.fancybox.min.css"><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
