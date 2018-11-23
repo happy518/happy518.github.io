@@ -253,6 +253,33 @@
   </entry>
   
   <entry>
+    <title>字面量，常量和变量之间的区别</title>
+    <link href="http://happy518.top/2017/03/02/2017-03-02-%E5%AD%97%E9%9D%A2%E9%87%8F%EF%BC%8C%E5%B8%B8%E9%87%8F%E5%92%8C%E5%8F%98%E9%87%8F%E4%B9%8B%E9%97%B4%E7%9A%84%E5%8C%BA%E5%88%AB/"/>
+    <id>http://happy518.top/2017/03/02/2017-03-02-字面量，常量和变量之间的区别/</id>
+    <published>2017-03-01T16:00:00.000Z</published>
+    <updated>2018-11-23T15:23:48.552Z</updated>
+    
+    <content type="html"><![CDATA[<p>经常看到这三者，基本上没有程序员都要和这三者打交道，之前每个都会使用，但是这样的来区别三者之间的关系还是第一次，从定义到实际的例子。这次全面弄清楚，以后就省得定义混淆。</p><p>那么我就首先来看个例子，有个大概的了解，再去看看那些生硬的定义。</p><p>c/c++ code<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">int</span> a; <span class="comment">// 变量</span></span><br><span class="line"><span class="keyword">const</span> <span class="keyword">int</span> b = <span class="number">10</span>; <span class="comment">// b为常量，10为字面量</span></span><br><span class="line"><span class="built_in">string</span> str = <span class="string">"hello world!"</span>; <span class="comment">// str为变量, hello world！为字面量</span></span><br></pre></td></tr></table></figure></p><p>看完这个例子，我相信大家都会有大致的了解，这其中可能稍微有点不太理解的就是<strong>字面量</strong>。</p><h1 id="字面量"><a href="#字面量" class="headerlink" title="字面量"></a>字面量</h1><blockquote><p>在计算机科学中，字面量(literal)是用于表达源代码中一个固定值的表示法(nation)，几乎所有计算机编程语言都具有对基本值的字面量表示，诸如，整数，浮点数以及字符串；而有很多也对布尔类型和字符类型的值也支持字面量表示；还有一些甚至对枚举类型的元素以及像数组，记录和对象等复合类型的值也支持字面量表示。</p></blockquote><p>有个不太好，但是足以说明问题的解释，那就是对象字面量就是引号引起来的部分，必须是等号右边的部分。虽然这样的解释不太好，但是确实如此，这就是字面量。</p><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> <span class="keyword">int</span> b = <span class="number">10</span>; <span class="comment">// b为常量，10为字面量</span></span><br><span class="line"><span class="built_in">string</span> str = <span class="string">"hello world!"</span>; <span class="comment">// str为变量，hello world!为字面量</span></span><br></pre></td></tr></table></figure><h1 id="变量"><a href="#变量" class="headerlink" title="变量"></a>变量</h1><p>有些数据在程序运行中可以变化或者被赋值，这成为变量。</p><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">int</span> a; <span class="comment">// a为变量</span></span><br></pre></td></tr></table></figure><h1 id="常量"><a href="#常量" class="headerlink" title="常量"></a>常量</h1><p>有些数据可以在程序使用之前预定设定并在整个运行过程中没有变化，称之为常量。</p><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> <span class="keyword">int</span> b = <span class="number">10</span>; <span class="comment">// b为常量，10为字面量</span></span><br></pre></td></tr></table></figure><h1 id="常量和变量的区别"><a href="#常量和变量的区别" class="headerlink" title="常量和变量的区别"></a>常量和变量的区别</h1><p>它们内存中的存储方式是一样的，只是常量不允许改变，就像只读一样。</p><h1 id="变量，常量和字面量的区别"><a href="#变量，常量和字面量的区别" class="headerlink" title="变量，常量和字面量的区别"></a>变量，常量和字面量的区别</h1><p>字面量是指有字母，数字等构成的字符串和数值。它只能作为右值出现(右值就是等号右边的值，如 int a = 123; 这里面a为左值，123为右值)。<br>常量和变量都属于变量，只不过常量是赋值过后不能在改变的变量，而普通的变量是可以在进行赋值操作的。</p>]]></content>
+    
+    <summary type="html">
+    
+      
+      
+        &lt;p&gt;经常看到这三者，基本上没有程序员都要和这三者打交道，之前每个都会使用，但是这样的来区别三者之间的关系还是第一次，从定义到实际的例子。这次全面弄清楚，以后就省得定义混淆。&lt;/p&gt;
+&lt;p&gt;那么我就首先来看个例子，有个大概的了解，再去看看那些生硬的定义。&lt;/p&gt;
+&lt;p&gt;c/c++
+      
+    
+    </summary>
+    
+      <category term="java" scheme="http://happy518.top/categories/java/"/>
+    
+    
+      <category term="java" scheme="http://happy518.top/tags/java/"/>
+    
+  </entry>
+  
+  <entry>
     <title>使用 .gitignore 忽略 Git 仓库中的文件</title>
     <link href="http://happy518.top/2017/02/22/2017-02-22-%E4%BD%BF%E7%94%A8-.gitignore-%E5%BF%BD%E7%95%A5-git-%E4%BB%93%E5%BA%93%E4%B8%AD%E7%9A%84%E6%96%87%E4%BB%B6/"/>
     <id>http://happy518.top/2017/02/22/2017-02-22-使用-.gitignore-忽略-git-仓库中的文件/</id>
