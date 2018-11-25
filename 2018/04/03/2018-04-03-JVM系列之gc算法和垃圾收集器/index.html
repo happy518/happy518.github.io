@@ -1,0 +1,216 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta name="generator" content="Hexo 3.8.0"><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="本站是杨帮主的技术分享博客。内容涵盖生活故事、Java后端技术、Spring Boot、Spring Cloud、微服务架构、大数据演进、高可用架构、中间件使用、系统监控等相关的研究与知识分享。"><title>JVM系列之gc算法和垃圾收集器 | 鹏兵的技术点滴</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/8.0.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/1.0.0/grids-responsive-min.css"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-127798542-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = 'https://hm.baidu.com/hm.js?' + '1b4131b600d79008de63bf372b248775';
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+  </script></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">JVM系列之gc算法和垃圾收集器</h1><a id="logo" href="/.">鹏兵的技术点滴</a><p class="description">杨帮主的博客 | 鹏兵的技术点滴</p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/history/"><i class="fa fa-book"> 历史</i></a><a href="/guestbook/"><i class="fa fa-comments"> 留言</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">JVM系列之gc算法和垃圾收集器</h1><div class="post-meta">Apr 3, 2018<span> | </span><span class="category"><a href="/categories/JVM/">JVM</a></span><script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> 阅读</span></span><span class="post-time"><span class="post-meta-item-text"> | </span><span class="post-meta-item-icon"><i class="fa fa-keyboard-o"></i><span class="post-count"> 5.7k</span><span class="post-meta-item-text"> 字</span></span></span><span class="post-time"> | <span class="post-meta-item-icon"><i class="fa fa-hourglass-half"></i><span class="post-count"> 20</span><span class="post-meta-item-text"> 分钟</span></span></span></div><div class="clear"><div class="toc-article" id="toc"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#概述"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#对象存活判断"><span class="toc-number">2.</span> <span class="toc-text">对象存活判断</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#生存还是死亡，这是个问题，"><span class="toc-number">2.1.</span> <span class="toc-text">生存还是死亡，这是个问题，</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#垃圾收集算法"><span class="toc-number">3.</span> <span class="toc-text">垃圾收集算法</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#标记-清除算法"><span class="toc-number">3.1.</span> <span class="toc-text">标记-清除算法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#复制算法"><span class="toc-number">3.2.</span> <span class="toc-text">复制算法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#标记-整理算法"><span class="toc-number">3.3.</span> <span class="toc-text">标记-整理算法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#分代收集算法"><span class="toc-number">3.4.</span> <span class="toc-text">分代收集算法</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#垃圾收集器"><span class="toc-number">4.</span> <span class="toc-text">垃圾收集器</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#serial收集器"><span class="toc-number">4.1.</span> <span class="toc-text">serial收集器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Serial-Old收集器"><span class="toc-number">4.2.</span> <span class="toc-text">Serial Old收集器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#parNew收集器"><span class="toc-number">4.3.</span> <span class="toc-text">parNew收集器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#parallel收集器"><span class="toc-number">4.4.</span> <span class="toc-text">parallel收集器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#parallel-Old收集器"><span class="toc-number">4.5.</span> <span class="toc-text">parallel Old收集器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CMS收集器"><span class="toc-number">4.6.</span> <span class="toc-text">CMS收集器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#G1收集器"><span class="toc-number">4.7.</span> <span class="toc-text">G1收集器</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#常用的收集器组合"><span class="toc-number">5.</span> <span class="toc-text">常用的收集器组合</span></a></li></ol></div></div><div class="post-content"><p>这篇文章将为大家介绍GC都有哪几种算法，以及JVM都有哪些垃圾收集器。它们的工作原理。</p>
+<h1 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h1><p>垃圾收集(Garbage Collection)通常被称为”GC”，它诞生于1960年MIT的Lisp语言，经过半个多世纪，目前已经十分成熟了，jvm中，程序计数器，虚拟机栈、本地方法栈都是随着线程而生随线程而灭，栈帧随着方法的进入和退出做入栈和出栈操作，实现了自动的内存清理，因此,我们的内存垃圾回收主要集中于java堆和方法区中，在程序运行期间，这部分内存的分配是使用都是动态的。</p>
+<p>垃圾回收机制主要解决下面三个问题：</p>
+<ul>
+<li>那些内存区域需要回收</li>
+<li>什么时候回收</li>
+<li>如何回收</li>
+</ul>
+<p>在前面对内存划分中，程序计数器，虚拟机栈和本地方法栈都是随线程生和死的，栈中的栈桢随着方法的调用有序的进栈和出栈，每个栈桢上分配的内存大小在类结构确定时就已知了，所以这些区域内存的分配和回收都是具有确定性的，很容易回收，当方法调用结束或者线程结束，占用的内存就可以被回收。而在java堆和方法区中，每个类需要的内存都可能不一样，一个方法中多个分支需要的内存也可能不一样，这些都只有在运行期才能知道创建那些对象，所以这部分内存的分配和回收都是动态的，垃圾回收也主要对这部分的内存进行回收。</p>
+<p>理论上，如果一个对象已死，那么此时它占用的内存就应该被回收，但是判断一个对象的生死，并不是那么容易，就像我们也常说，一些人虽然活着但就像死了一样，而一些人虽然死了但仍然活在我们心中，在程序生死可不能这么模棱两可，所以必须要有判断生死的方法。</p>
+<h1 id="对象存活判断"><a href="#对象存活判断" class="headerlink" title="对象存活判断"></a>对象存活判断</h1><p>判断对象是否存活一般有两种方式：</p>
+<p><strong>引用计数法：</strong> </p>
+<p>每个对象有一个引用计数属性，新增一个引用是计数加1，引用释放是计数减1，计数为0，就说明不存在对该对象的引用了，那这个对象就没有存活的意义了，也就是说这个对象是死的，可被回收。</p>
+<p>缺点：这种判断方法虽然简单高效，但是不能解决对象之间循环引用的问题，例如A对象和B对象都是同一个类的对象实例，A中字段instance引用对象B，B对象字段instance引用对A，如果垃圾收集器想回收A对象，那么A对象的引用计数值要为0，也就是要清除B中字段instance对A的引用，那么就需要清除B对象，而B对象有被A中的字段instance引用着，需要清除A对象，想要回收A对象，A的引用计数值要为0…..，这样就形成了循环，A和B都不能被回收。</p>
+<p><strong>可达性分析(Reachability Analysis)：</strong> </p>
+<p>从GC Roots开始向下搜索，搜索所走过的路径成为引用链。<br>当一个对象到GC Roots没有任何引用链相连时，就说明这个对象无法被使用了，或者说对象已死可被回收了。GC Roots是一个特殊的对象，且绝对不能被其他对象所引用，不然也会出现像引用计数器那样有循环引用的问题</p>
+<p>在java语言中，GC Roots包括：</p>
+<ul>
+<li>虚拟机栈中引用的对象</li>
+<li>方法区中类静态属性实体引用的对象</li>
+<li>方法区中常量引用的对象</li>
+<li>本地方法栈中JNI引用的对象</li>
+</ul>
+<p><img src="https://wenshixin.gitee.io/blog/2018/08/28/Java%E8%99%9A%E6%8B%9F%E6%9C%BA%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/%E5%8F%AF%E8%BE%BE%E6%80%A7%E5%88%86%E6%9E%90%E7%AE%97%E6%B3%95%E5%88%A4%E5%AE%9A%E5%AF%B9%E8%B1%A1%E6%98%AF%E5%90%A6%E5%9B%9E%E6%94%B6.jpg" alt=""></p>
+<p>上面这两种判断方式都和”引用”有关，引用计数算法需要计算对象的引用数量，可达性分析算法需要判断对象是否有可达的引用链，引用也是一个很模糊的概念，为了更加清晰的描述java中的对象引用，在JDK1.2后，java将引用分为强引用(strong reference)，软引用(soft reference)和弱引用(weak reference)，虚引用(phantom reference)4种，并且除了强引用外都有与之对应的java类。分别是引用的基类Reference，软引用类SoftReference，弱引用类WeakReference，虚引用类PhantomReference。</p>
+<p>强引用很常见，类似Object obj = new Object(); 这种引用就是强引用。</p>
+<p>软引用是用来描述一些有用但非必须的对象引用，当内存紧张的时候，才会把这些对象列为回收对象，进行二次回收，如果回收之后还是没有足够的内存，就会出现内存异常。</p>
+<p>弱引用也是用来描述非必须的对象引用，但是引用的强度要比软引用弱，不管内存是否充足，被弱引用关联的对象都将在下一次垃圾收集时被回收。</p>
+<p>虚引用又称为是幽灵引用或者是幻影引用，是最弱的引用关系，一个对象是否有虚引用，完全不会对该对象的生死造成影响，也无法用虚引用来取得一个对象实例。为一个对象设置虚引用关联的唯一目的就是，在这个对象被垃圾收集器回收时收到一个系统的死亡通知，通俗的说就是让对象死的明明白白。</p>
+<h2 id="生存还是死亡，这是个问题，"><a href="#生存还是死亡，这是个问题，" class="headerlink" title="生存还是死亡，这是个问题，"></a>生存还是死亡，这是个问题，</h2><p>在可达性分析算法中，即使是不可达对象，也并非要立即执行”死刑”，它们暂时处于”死缓”。就像C++中，对象死亡要调用析构函数一样，java中的对象在死亡是也有一个类似的finalize()方法，但是两者的作用并不相同，不可达的对象第一次会被标记并进行一次筛选，筛选的条件就是好这个finallize()方法，当对象没有覆盖finalize()方法，或者finalize()方法被虚拟机调用了而这个对象还没有回收，finalize()方法都不会执行，如果判断需要执行finalize()方法，这个对象就会被放到一个队列中，有低优先级的单独线程执行对象中的finnalize()方法，如果在finnalize()方法中，该对象被引用链上的其他的可达对象关联了，那么这个对象就可以被移出这个”即将回收”队列，从而死里逃生，这个finalize()方法可以说是对象逃脱死亡命运的最后一次机会，如果还没有逃脱，这个对象就真正要被垃圾收集器回收了，但是这个机会每个对象只有一次，第一次是可以逃脱的，第二次再进入这个队列，无论如何也逃脱不了被回收的命运。</p>
+<p>判断常量是否应该被废弃的方法比较简单，而判断一个类是无用的类，则需要满足下面三个条件：</p>
+<ul>
+<li>该类的所有实例对象都已经被回收了，也即java堆内存中没有该类的对象实例。</li>
+<li>加载该类的类加载器已经被回收了</li>
+<li>该类对应的java.lang.Class对象在任何地方都没有被引用，也即无法通过反射访问该类。</li>
+</ul>
+<h1 id="垃圾收集算法"><a href="#垃圾收集算法" class="headerlink" title="垃圾收集算法"></a>垃圾收集算法</h1><h2 id="标记-清除算法"><a href="#标记-清除算法" class="headerlink" title="标记-清除算法"></a>标记-清除算法</h2><p>“标记-清除”(Mark-Sweep)算法，如它的名字一样，算法分为”标记”和”清除”两个阶段：首先标记出所有需要回收的对象，在标记完成后统计回收掉所有被标记的对象。之所以它是最基础的收集算法，是因为后续的收集算法都是基于这种思路并对其缺点进行改进而得到的。</p>
+<p>它的主要缺点有两个：一个是效率问题，标记和清除过程的效率都不高，另外一个是空间问题，标记清除之后会产生大量不连续的内存碎片，空间碎片太多可能会导致，当程序在以后的运行过程中需要分配较大对象时无法找到足够的连续内存而不得不提前触发另一次垃圾收集动作。</p>
+<p><img src="http://www.itmind.net/assets/images/2017/jvm/gc_garbage1.png" alt=""></p>
+<h2 id="复制算法"><a href="#复制算法" class="headerlink" title="复制算法"></a>复制算法</h2><p>“复制”(Copying)的收集算法，它将可用内存按容量划分为大小相等的两块，每次只使用其中的一块，当这一块的内存用完了，就将还存活的对象复制到另一块上面，然后再把已经使用过的内存空间一次性清理掉。</p>
+<p>这样使得每次都是对其中的一块内存进行回收，内存分配时也就不用考虑内存碎片等复杂情况，只要移动堆顶指针，按顺序分配内存即可，实现简单，运行高效，只是这种算法的代价是将内存缩小为原来的一半，持续复制长期生存的对象则导致效率低下。</p>
+<p><img src="http://www.itmind.net/assets/images/2017/jvm/gc_garbage2.png" alt=""></p>
+<h2 id="标记-整理算法"><a href="#标记-整理算法" class="headerlink" title="标记-整理算法"></a>标记-整理算法</h2><p>复制收集算法在对象存活率较高时就要执行较多的复制操作，效率将会变低，更关键的是，如果不想浪费50%的空间，就需要有额外的空间进行分配担保，以应对被使用的内存中所有对象100%存活的极端情况，所以在老年代一般不能直接选用这种算法。</p>
+<p>根据老年代的特点，有人提出了另外一种”标注-整理”(Mark-Compact)算法，标记过程仍然与”标记-清除”算法一样，但后续步骤不是直接对可回收对象进行清理，而是让所有存活的对象都向一端移动，然后直接清理掉端边界以外的内存。</p>
+<p><img src="http://www.itmind.net/assets/images/2017/jvm/gc_garbage3.png" alt=""></p>
+<h2 id="分代收集算法"><a href="#分代收集算法" class="headerlink" title="分代收集算法"></a>分代收集算法</h2><p>GC分代的基本假设：绝大部分对象的生命周期都非常短暂，存活时间短。</p>
+<p>“分代收集”(Generational Collection)算法，把java堆分为新生代和老年代，这样就可以根据各个年代的特点采用最适合的收集算法，在新生代中，每次垃圾收集时都会发现有大批对象死去，只有少量存活，那就选用复制算法，只需要付出少量存活对象的复制成本就可以完成收集，而老年代中因为对象存活率较高，没有额外空间对它进行分配担保，就必须采用”标记-清理”和”标记-整理”算法来进行回收。</p>
+<p><img src="https://wenshixin.gitee.io/blog/2018/08/28/Java%E8%99%9A%E6%8B%9F%E6%9C%BA%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/%E5%88%86%E4%BB%A3%E6%94%B6%E9%9B%86%E7%AE%97%E6%B3%95.jpg" alt=""></p>
+<h1 id="垃圾收集器"><a href="#垃圾收集器" class="headerlink" title="垃圾收集器"></a>垃圾收集器</h1><blockquote>
+<p>如果说收集算法是内存回收的方法论，垃圾收集器就是内存回收的具体实现</p>
+</blockquote>
+<p>不同版本的JDK选择的垃圾收集器也可能不同，我们可以在命令行中查看已安装的JDK的默认垃圾收集器， java -XX:+PrintCommondLinesFlags -version</p>
+<p><img src="https://wenshixin.gitee.io/blog/2018/08/28/Java%E8%99%9A%E6%8B%9F%E6%9C%BA%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/%E6%9F%A5%E7%9C%8B%E9%BB%98%E8%AE%A4%E7%9A%84%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E5%99%A8.jpg" alt=""></p>
+<p>我的机器上装的是JDK8，parallelGC是该版本JDK默认采用的垃圾收集器组合，包括PS scavenge(新生代收集器)和PS Mark Sweep(老年代收集器)。也可以通过下面的代码打印出来正在使用的收集器。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">GCTest</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        List&lt;GarbageCollectorMXBean&gt; beans = ManagementFactory.getGarbageCollectorMxBeans();</span><br><span class="line">        <span class="keyword">for</span>(GarbageCollectorMXBean bean : beans) &#123;</span><br><span class="line">            System.out.println(bean.getName());</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里也给出一张垃圾收集器组合相关的常用参数表</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UseSerialGC</td>
+<td>虚拟机运行在Clinet模式下的默认值，使用Serial + Serial Old收集器组合回收内存</td>
+</tr>
+<tr>
+<td>UseParNewGC</td>
+<td>使用ParNew + Serial Old收集器组合回收内存</td>
+</tr>
+<tr>
+<td>UseConcMarkSweep</td>
+<td>使用ParNew + CMS + Serial Old收集器组合回收内存</td>
+</tr>
+<tr>
+<td>UseParllelGC</td>
+<td>虚拟机运行在server模式下的默认值，使用PS Parllel + Serial Old(PS MarkSweep)收集器组合回收内存</td>
+</tr>
+</tbody>
+</table>
+<p>在介绍垃圾收集器之前，我们先想象一下打扫卫生的场景，如果一边有人打扫，一边又有人扔垃圾，那么卫生能打扫干净吗？答案肯定是不能的，那怎么才能打扫干净呢？你可能会说打扫卫生的时候不能有人再扔垃圾了，没错就是这样，在java虚拟机中，垃圾收集器就像打扫卫生的人，可能有一个也可能有多个，对应也就是单线程和多线程，其他线程就像是扔垃圾的人。垃圾收集器打扫卫生肯定也是需要时间的，这个时间不能有其他线程”扔垃圾”，也既是暂停其他线程使用直到垃圾收集器结束，在java虚拟机中，这种事情叫做”Stop The World”, 简称STW。计算机运行速度很快，如果把STW的时间缩短到很短，人们根本察觉不到。</p>
+<h2 id="serial收集器"><a href="#serial收集器" class="headerlink" title="serial收集器"></a>serial收集器</h2><p>串行收集器是最古老，最稳定以及效率高的收集器，可能会产生较长时间的卡顿，只使用一个线程去回收，新生代和老年代使用串行回收； 新生代复制算法，老年代标记-压缩算法；垃圾收集的过程中会Stop the World(服务暂停)</p>
+<p>如果是在单CPU环境下，Serial收集器没有线程交互的开销，理论上是可以获得最高的单线程执行效率，STW的时间也可以控制在几十到几百毫秒内。这个时间是完全可以接受的。</p>
+<p><strong>参数控制：</strong> -XX:+UseSerialGC 串行收集器</p>
+<p><img src="http://www.itmind.net/assets/images/2017/jvm/gc_garbage4.png" alt=""></p>
+<h2 id="Serial-Old收集器"><a href="#Serial-Old收集器" class="headerlink" title="Serial Old收集器"></a>Serial Old收集器</h2><p>Serial Old收集器是Serial收集器的老年代版本，同样也是一个单线程收集器，使用了标记-整理算法。由于PS MarkSweep收集器与Serial Old收集器的实现非常接近，所以在许多官方资料中都是直接以Serial Old代替Ps MarkSweep。PS MarkSweep收集器可以看做是Serial Old收集器的别名</p>
+<h2 id="parNew收集器"><a href="#parNew收集器" class="headerlink" title="parNew收集器"></a>parNew收集器</h2><p>parNew收集器其实就是serial收集器的多线程版本，收集算法，STW，对象分配的规则，回收策略都与Serial收集器完全一样。新生代并行，老年代串行；新生代复制算法，老年代标记-压缩算法</p>
+<p>parNew虽然有多线程的优势，但是在但CPU和多CPU环境下，效果并不一定比Serial好，至少在单CPU环境下是肯定不如Serial的，看起来人多力量大，但由于线程交互开销时间，效果比不理想，多线程的好处在于更高效的利用CPU。提高CPU的吞吐量，让CPU空闲时间减少。</p>
+<p><strong>参数控制：</strong> -XX:+UseParNewGC parNew收集器   -XX:ParallelGCThreads 限制线程总数</p>
+<p><img src="http://www.itmind.net/assets/images/2017/jvm/gc_garbage5.png" alt=""></p>
+<h2 id="parallel收集器"><a href="#parallel收集器" class="headerlink" title="parallel收集器"></a>parallel收集器</h2><p>Parallel Scavenge收集器类似于parNew收集器，parallel收集器更关注系统的吞吐量，可以通过参数来打开自适应调节策略，虚拟机会根据当前系统的运行情况收集性能监控信息，动态调整这些参数以提供最合适的停顿时间或最大吞吐量；也可以通过参数控制GC的时间不大于多少毫秒或者比例，新生代复制算法，老年代标记-压缩</p>
+<p><strong>参数控制：</strong> -XX:+UseParallelGC 使用parallel收集器+老年代串行</p>
+<h2 id="parallel-Old收集器"><a href="#parallel-Old收集器" class="headerlink" title="parallel Old收集器"></a>parallel Old收集器</h2><p>parallel old是parallel scavenge收集器的老年代版本，使用多线程和”标记-整理”算法。这个收集器是在JDK1.6中开始提供的。</p>
+<p>在Parallel Old收集器出现之前，选择了Parallel Scavenge收集器作为新生代的收集器，就只能线程Serial Old收集器作为老年代收集器，这样肯定是对多CPU的浪费，所以Parallel Scavenge收集器 + Parallel Old收集器，对于多CPU环境吞吐量要求高的环境，算是强强联合。</p>
+<p><strong>参数控制：</strong> -XX:UseParallelOldGC 使用parallel收集器+老年代并行</p>
+<h2 id="CMS收集器"><a href="#CMS收集器" class="headerlink" title="CMS收集器"></a>CMS收集器</h2><p>CMS(Concurrent Mark Sweep)收集器是一种以获取最短回收停顿时间为目标的收集器，目前很大一部分的java应用都集中在互联网站h或B/S系统的服务端上，这类应用尤其重视服务的响应速度，希望系统停顿时间最短，以给用户带来较好的体验。</p>
+<p>从名字(包含”Mark Sweep”)上就可以看出CMS收集器是基于”标记-清除”算法实现的，它的运作过程相对前面几种收集器来说要更复杂一些，整个过程分为4个步骤，包括：</p>
+<ul>
+<li>初始标记(CMS initial mark)</li>
+<li>并发标记(CMS concurrent mark)</li>
+<li>重新标记(CMS remark)</li>
+<li>并发清除(CMS concurrent sweep)</li>
+</ul>
+<p>其中初始标记，重新标记这两个步骤仍然要”Stop the World”，初始标记仅仅只是标记一下GC Roots能直接关联到的对象，速度很快，并发标记阶段就是进行GC Roots Tracing的过程，而重新标记阶段则是为了修正并发期间，因用户程序继续运作而导致标记产生变动的那一部分对象的标记记录，这个阶段的停顿时间一般会比初始标记时间稍长一些，但远比并发标记的时间短。</p>
+<p>由于整个过程中耗时最长的并发标记和并发清除，收集器线程都可以与用户线程一起工作，所以总体上来说，CMS收集器的内存回收过程是与用户线程一起并发执行的。老年代收集器(新生代使用的是ParNew)</p>
+<p><strong>优点：</strong> 并发收集，低停顿<br><strong>缺点：</strong> 产生大量空间碎片，并发阶段会降低吞吐量</p>
+<p><strong>参数控制：</strong></p>
+<blockquote>
+<p>-XX:+UseConcMarkSweepGC 使用CMS收集器<br>-XX:+UseCMSCompactAtFullCollection Full GC后，进行一次碎片整理；整理过程是独占的，会引起停顿时间变长<br>-XX:+CMSFullGCsBeforeCompaction 设置进行几次Full GC后，进行一次碎片整理<br>-XX:ParallelCMSThreads 设定CMSd 线程数量(一般情况下可以约等于可用CPU数量)</p>
+</blockquote>
+<p><img src="http://www.itmind.net/assets/images/2017/jvm/gc_garbage6.png" alt=""></p>
+<h2 id="G1收集器"><a href="#G1收集器" class="headerlink" title="G1收集器"></a>G1收集器</h2><p>G1是目前技术发展最前沿成果之一，Hotspot开发团队赋予它的使命是未来可以替换掉JDK1.5中发布的CMS收集器。与CMS收集器相比G1收集器有如下特点：</p>
+<ol>
+<li><strong>空间整合：</strong> G1收集器采用”标记-整理”算法，不会产生内存空间碎片。分配大对象时不会因为无法找到连续空间而提前触发下一次GC。</li>
+<li><strong>可预测停顿：</strong> 这是G1的另一大优势，降低停顿时间是G1和CMS的共同关注点，但G1除了追求低停顿外，还能建立可预测的停顿时间模型，能让使用者明确指定在一个长度为N毫秒的时间片段内，消耗在垃圾收集上的时间不得超过N毫秒，这几乎已经是实时Java(RTSJ)的垃圾收集器的特征了。</li>
+</ol>
+<p>上面提到的垃圾收集器，收集的范围都是整个新生代和老年代，为G1不再是这样，使用G1收集器时，java堆的内存分布与其他收集器有很大差别，它将整个java堆划分为多个大小相等的独立区域(Region)，虽然还保留有新生代和老年代的概念，但新生代和老年代不再是物理隔阂了，它们都是一部分(可以不连续)Region的集合。</p>
+<p><img src="http://www.itmind.net/assets/images/2017/jvm/gc_garbage7.jpg" alt=""></p>
+<p>G1的新生代收集跟ParNew类似，当新生代占用达到一定比例的时候，开始触发收集，和CMS类似，G1收集器收集老年代对象会有短暂的停顿。优先回收垃圾最多的区域。</p>
+<p>收集步骤：</p>
+<ul>
+<li>标记阶段, 首先初始标记(initial mark),这个阶段是停顿的(Stop the World Event), 并且会触发一次普通Mintor GC, 对应GC log: GC pause(young)(initial-mark)</li>
+<li>Root Region Scanning, 程序运行过程中会回收survivor区(存活到老年代)，这一过程必须在young GC之前完成。</li>
+<li>ConCurrent Marking，在整个堆中进行并发标记(和应用程序并发执行)，此过程可能被young GC中断。在并发标记阶段，若发现区域对象中的所有对象都是垃圾，那么这个区域会立即回收(图中X部分)，同时，并发标记过程中，会计算每个区域的对象活性(区域中存活对象的比例)</li>
+</ul>
+<p><img src="http://www.itmind.net/assets/images/2017/jvm/gc_garbage8.png" alt=""></p>
+<ul>
+<li>Remark，在标记，会有短暂停顿(STW)，在标记阶段是用来收集，并发标记阶段产生的新的垃圾(并发阶段和应用程序一同运行)，G1中采用了比CMS更快的初始快照算法：snapshot-at-the-beginning(SATB)。</li>
+<li>Copy/Clean up, 多线程清除失活对象，会有STW，G1将回收区域的存活对象拷贝到新区域，清除RememberSets, 并发清空回收区域并把它返回到空闲区域链表中。</li>
+</ul>
+<p><img src="http://www.itmind.net/assets/images/2017/jvm/gc_garbage9.png" alt=""></p>
+<ul>
+<li>复制/清除过后，回收区域的活性对象已经被集中回收到深蓝色和深绿色区域。</li>
+</ul>
+<p><img src="http://www.itmind.net/assets/images/2017/jvm/gc_garbage10.png" alt=""></p>
+<h1 id="常用的收集器组合"><a href="#常用的收集器组合" class="headerlink" title="常用的收集器组合"></a>常用的收集器组合</h1><p>几种垃圾收集器的组合如下图所示：</p>
+<p><img src="https://wenshixin.gitee.io/blog/2018/08/28/Java%E8%99%9A%E6%8B%9F%E6%9C%BA%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E5%99%A8%E7%BB%84%E5%90%88.jpg" alt=""></p>
+<table>
+<thead>
+<tr>
+<th>服务器</th>
+<th>新生代GC策略</th>
+<th>老年代GC策略</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>组合1</td>
+<td>Serial</td>
+<td>Serial Old</td>
+<td>Serial和Serial Old都是单线程进行GC，特点就是GC时暂停所有应用线程 </td>
+</tr>
+<tr>
+<td>组合2</td>
+<td>Serial</td>
+<td>CMS + Serial Old</td>
+<td>CMS(Concurrent Mark Sweep)是并发GC，实现GC线程和应用线程并发工作，不需要暂停所有应用线程。另外，当CMS进行GC失败，会自动使用Serial Old策略进行GC。</td>
+</tr>
+<tr>
+<td>组合3</td>
+<td>ParNew</td>
+<td>CMS</td>
+<td>使用-XX:+UseParNewGC选项来开启，ParNew是Serial的并行版本，可以指定GC线程数，默认GC线程数为CPU的数量。可以使用-XX:ParallelGCThreads选项指定GC线程数，如果指定了选项-XX:+UseConcMarkSweepGC选项，则新生代默认使用ParNew GC策略。</td>
+</tr>
+<tr>
+<td>组合4</td>
+<td>ParNew</td>
+<td>Serial Old</td>
+<td>使用-XX:UseParNewGC选项开启。新生代使用ParNew GC策略，老年代默认使用Serial Old GC策略</td>
+</tr>
+<tr>
+<td>组合5</td>
+<td>Parallel Scavenge</td>
+<td>Serial Old</td>
+<td>Parallel Scavenge策略主要是关注一个可控的吞吐量，应用程序运行时间/(应用程序运行时间 + GC时间)，可见这会使得CPU的利用率尽可能的高，适用于后台持久运行的应用程序，而不适用于交互较多的应用程序。</td>
+</tr>
+<tr>
+<td>组合6</td>
+<td>Parallel Scavenge</td>
+<td>Parallel Old</td>
+<td>Parallel Old是Serial Old的并发版本</td>
+</tr>
+<tr>
+<td>组合7</td>
+<td>G1GC</td>
+<td>G1GC</td>
+<td>-XX:+UnlockExperimentalVMOptions, -XX:+UseG1GC 开启；-XX:+MaxGCPauseMillis=50 暂停目标时间，-XX:+GCPauseIntervalMillis=200; 暂停间隔目标; -XX:+G1YoungGenSize=512m 年轻代大小，-XX:SurvivorRatio=6 幸存区比例</td>
+</tr>
+</tbody>
+</table>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a class="article-share-link" data-url="http://happy518.top/2018/04/03/2018-04-03-JVM系列之gc算法和垃圾收集器/" data-id="cjox0ta47000w04uprjqhf20x" data-qrcode="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAN4AAADeCAAAAAB3DOFrAAACq0lEQVR42u3aQW7DQAgF0N7/0qnUVavKzgeGJIvnVdQ49rxZDBT4+oqvx8919ZfHr+v/PVd3/r/u335/z+jCw8PDay39/pX5o5Mn5BtxYJvw8PDw1nj3weB+0cm3yf154El+hYeHh/cJvN63k0S5Gqjw8PDwPo1XReYFjl6AwcPDw3svL39B9c68KJyXMFZqLXh4eHidTlPhEH/v58X+Hh4eHt6gq95r7eeHfi/JLqwWDw8Pb4FXLcL20uXJONe8JYaHh4d3ltcrKPRGAZJhgmrh48kG4eHh4S3z8rM0h1WLsMlIQf5MPDw8vD1enuAmhYbJZjUZeHh4eG/i9Y74XsGil46XSx54eHh4C7zqcEB1WdWjP2mhVdePh4eHd5Y3CQanlnufXle/xcPDw3slLwkDeZl1sugJMqpS4+Hh4a3xDrSgWkMD1WT68n48PDy8l/CqTab51lST9XLpFg8PD2+NV21ZVQuseQttHoTw8PDw9niTF9xvUK9gMSo99AIJHh4eXpF3augqec4kGOTJ+p9v8fDw8NZ4VVjvZZOtTEoel3NkeHh4eEd5E2ReCJ5k+nmZ4/LJeHh4eAu8avF0Xoaojmr1QgUeHh7eHi9ZYqEEMDjWq0Elasjh4eHhHeWdGng61XPrNc8u78fDw8N7Ce/UsZ7jJyn7k+fg4eHhLfAmZYVeOj4JD71gg4eHh3eWl/zbX012q4nyJDg9+RUeHh7eMq8aHspdtfEQVb71eHh4eHu88lFbLC5UBxF6nw9ceHh4eEXepKCQJ8pnx60KgQEPDw9vjTcJBtXQ0kuy8zS98GI8PDy8ZV4+EJAc7klomYxw4eHh4X0O71Rht7c11TCDh4eHt8dLihEJqVfw7ZUqos3Cw8PDW+D18tJTAwfVMa/DnT08PDy8Gu8bODyxhgiXgBYAAAAASUVORK5CYII=">分享</a><div class="tags"><a href="/tags/JVM/">JVM</a></div><div class="post-nav"><a class="pre" href="/2018/04/04/2018-04-04-JVM系列之jvm调优的常用命令/">JVM系列之jvm调优的常用命令</a><a class="next" href="/2018/04/02/2018-04-02-JVM系列之JVM内存结构/">JVM系列之jvm内存结构</a></div><div id="container"></div><link rel="stylesheet" type="text/css" href="//unpkg.com/gitalk/dist/gitalk.css?v=0.0.0"><script type="text/javascript" src="//cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.js?v=0.0.0"></script><script type="text/javascript" src="//unpkg.com/gitalk/dist/gitalk.min.js?v=0.0.0"></script><script>var gitalk = new Gitalk({
+  clientID: 'b53d968c6631f4f3eb92',
+  clientSecret: '0d39284d99a19e550c327f35f809793bea719899',
+  repo: '',
+  owner: 'happy518',
+  admin: ['happy518'],
+  id: md5(location.pathname),
+  distractionFreeMode: false
+})
+gitalk.render('container')
+</script></div></div></div><div class="pure-u-1 pure-u-md-1-4"><div id="sidebar"><div class="widget"><form class="search-form" action="//www.baidu.com/baidu" method="get" accept-charset="utf-8" target="_blank"><input type="search" name="word" maxlength="20" placeholder="Search"><input type="hidden" name="si" value="http://happy518.top"><input name="tn" type="hidden" value="bds"><input name="cl" type="hidden" value="3"><input name="ct" type="hidden" value="2097152"><input name="s" type="hidden" value="on"></form></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/JVM/">JVM</a><span class="category-list-count">5</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/git/">git</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/">java</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/jdk8/">jdk8</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/redis/">redis</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/springboot/">springboot</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/性能/">性能</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/漫谈/">漫谈</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/设计模式/">设计模式</a><span class="category-list-count">1</span></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/JVM/" style="font-size: 15px;">JVM</a> <a href="/tags/redis/" style="font-size: 15px;">redis</a> <a href="/tags/生活/" style="font-size: 15px;">生活</a> <a href="/tags/博客/" style="font-size: 15px;">博客</a> <a href="/tags/漫谈/" style="font-size: 15px;">漫谈</a> <a href="/tags/OOAD/" style="font-size: 15px;">OOAD</a> <a href="/tags/Git/" style="font-size: 15px;">Git</a> <a href="/tags/Github/" style="font-size: 15px;">Github</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/Blog/" style="font-size: 15px;">Blog</a> <a href="/tags/other/" style="font-size: 15px;">other</a> <a href="/tags/springboot/" style="font-size: 15px;">springboot</a> <a href="/tags/jdk8/" style="font-size: 15px;">jdk8</a> <a href="/tags/lamdaba/" style="font-size: 15px;">lamdaba</a> <a href="/tags/源码/" style="font-size: 15px;">源码</a> <a href="/tags/函数式接口/" style="font-size: 15px;">函数式接口</a> <a href="/tags/stream/" style="font-size: 15px;">stream</a> <a href="/tags/optional/" style="font-size: 15px;">optional</a> <a href="/tags/性能/" style="font-size: 15px;">性能</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2018/11/01/2018-11-01-开篇：授人以鱼不若授人以渔 —— Redis 可以用来做什么？/">redis可以用来做什么</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/30/2018-10-30-常用性能监控指南/">常用性能监控指南</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/29/2018-10-29-短小精悍之 Redis 命令行工具有趣的罕见用法/">redis命令行工具有趣的罕见用法</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/28/2018-10-28-深究分布式缓存的九个点/">深究分布式缓存的几个点</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/21/2018-10-21-jdk8的optional深入详解/">jdk8的optional深入详解</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/09/27/2018-09-27-jdk8Stream流详解/">jdk8方法引用详解</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/09/26/2018-09-26-jdk8函数式接口/">jdk8函数式接口学习总结</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/09/25/2018-09-25-jdk8学习笔记/">jdk8学习总结</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/04/11/2018-04-11-SpringBoot中注入ApplicationContext对象的三种方式/">springboot中注入ApplicationContext对象的三种方式</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/04/05/2018-04-05-JVM系列之java gc分析/">JVM系列之java gc分析</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="https://github.com/happy518" title="my github" target="_blank">my github</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2018 <a href="/." rel="nofollow">鹏兵的技术点滴.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//cdn.bootcss.com/fancybox/3.3.5/jquery.fancybox.min.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/fancybox/3.3.5/jquery.fancybox.min.css"><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
