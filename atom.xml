@@ -178,9 +178,9 @@
     
       <category term="jdk8" scheme="http://happy518.top/tags/jdk8/"/>
     
-      <category term="源码" scheme="http://happy518.top/tags/%E6%BA%90%E7%A0%81/"/>
-    
       <category term="函数式接口" scheme="http://happy518.top/tags/%E5%87%BD%E6%95%B0%E5%BC%8F%E6%8E%A5%E5%8F%A3/"/>
+    
+      <category term="源码" scheme="http://happy518.top/tags/%E6%BA%90%E7%A0%81/"/>
     
   </entry>
   
@@ -204,9 +204,9 @@
     
       <category term="jdk8" scheme="http://happy518.top/tags/jdk8/"/>
     
-      <category term="lamdaba" scheme="http://happy518.top/tags/lamdaba/"/>
-    
       <category term="源码" scheme="http://happy518.top/tags/%E6%BA%90%E7%A0%81/"/>
+    
+      <category term="lamdaba" scheme="http://happy518.top/tags/lamdaba/"/>
     
   </entry>
   
@@ -369,6 +369,28 @@
   </entry>
   
   <entry>
+    <title>spirng注解@Autowried和@Resource区别</title>
+    <link href="http://happy518.top/2017/07/13/2017-07-13-spring%E6%B3%A8%E8%A7%A3@Autowried%E5%92%8C@Resource%E5%8C%BA%E5%88%AB/"/>
+    <id>http://happy518.top/2017/07/13/2017-07-13-spring注解@Autowried和@Resource区别/</id>
+    <published>2017-07-12T16:00:00.000Z</published>
+    <updated>2018-11-28T15:15:29.298Z</updated>
+    
+    <content type="html"><![CDATA[<p>@Resource和@Autowired都是做bean的注入时使用，其实@Resource并不是Spring的注解，它的包是javax.annotation.Resource。需要导入，但是Spring支持该注解的注入。</p><h1 id="相同点"><a href="#相同点" class="headerlink" title="相同点"></a>相同点</h1><p>两者都可以写在字段和setter方法上，两者如果都写在字段上，那么就不需要在写setter方法。</p><h1 id="不同点"><a href="#不同点" class="headerlink" title="不同点"></a>不同点</h1><h2 id="Autowired"><a href="#Autowired" class="headerlink" title="@Autowired"></a>@Autowired</h2><p><strong>查看源码</strong><br><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">packge org.springframework.beans.factory.annotation;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.lang.annotation.ElementType;</span><br><span class="line"><span class="keyword">import</span> java.lang.annotation.Retention;</span><br><span class="line"><span class="keyword">import</span> java.lang.annotation.RetentionPolicy;</span><br><span class="line"><span class="keyword">import</span> java.lang.annotation.Target;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.RUNTIME)</span><br><span class="line"><span class="meta">@Target</span>(&#123;ElementType.CONSTRUCTOR, ElementType.FIELD, ElementType.METHOD&#125;)</span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Autowired &#123;</span><br><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">required</span><span class="params">()</span> <span class="keyword">default</span> <span class="keyword">true</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p><p>@Autowired为Spring提供的注解，需要导入包org.springframework.beans.factory.annotation.Autowired; 只按照byType注入。</p><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">public class TestServiceImpl &#123;</span><br><span class="line">    // 下面两种@Autowired只要使用一种即可</span><br><span class="line">    @Autowired</span><br><span class="line">    private UserDao userDao;</span><br><span class="line">    </span><br><span class="line">    @Autowired</span><br><span class="line">    public void setUserDao(UserDao userDao) &#123;</span><br><span class="line">        this.userDao = userDao;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure><p>@Autowired注解是按照类型(byType)装配依赖对象，默认情况下它要求依赖对象必须存在，如果允许null，可以设置它的required属性为false。如果我们想使用按照名称(byName)来装配，可以结合@Qualifier注解一起使用。如下：</p><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">public class TestServiceImpl &#123;</span><br><span class="line">    @Autowired</span><br><span class="line">    @Qualifier(&quot;userDao&quot;)</span><br><span class="line">    private UserDao userDao;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure><p>当前，您也可以通过@Autowired对方法或构造函数进行标注，如果构造函数有两个入参，分别为bean1和bean2。@Autowired将分别寻找和它们类型匹配的bean，将它们作为CountryService(Bean1 bean1, Bean2 bean2)的入参来创建CountryService bean。来看下面的代码： 对方法<br><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Boss</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> Car car;</span><br><span class="line">    <span class="keyword">private</span> Office office;</span><br><span class="line">    </span><br><span class="line">    <span class="meta">@Autowired</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setCar</span><span class="params">(Car car)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.car = car;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="meta">@Autowired</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setOffice</span><span class="params">(Office office)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.office = office;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p><p>这是，@Autowired将查找被标记的方法的入参类型的Bean，并调用方法自动注入这些Bean。而下面的使用方法则对构造函数进行标注；<br><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Boss</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> Car car;</span><br><span class="line">    <span class="keyword">private</span> Office office;</span><br><span class="line">    </span><br><span class="line">    <span class="meta">@Autowired</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">Boss</span><span class="params">(Car car, Office office)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.car = car;</span><br><span class="line">        <span class="keyword">this</span>.office = office;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p><h2 id="Resource"><a href="#Resource" class="headerlink" title="@Resource"></a>@Resource</h2><p><strong>查看源码</strong><br><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> javax.annotation;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.lang.annotation.*;</span><br><span class="line"><span class="keyword">import</span> <span class="keyword">static</span> java.lang.annotation.ElementType.*;</span><br><span class="line"><span class="keyword">import</span> <span class="keyword">static</span> java.lang.annotation.RetentionPolict.*;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Target</span>(&#123;TYPE, FIELD, METHOD&#125;)</span><br><span class="line"><span class="meta">@Retention</span>(RUNTIME)</span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Resource &#123;</span><br><span class="line">    <span class="function">String <span class="title">name</span><span class="params">()</span> <span class="keyword">default</span> ""</span>;</span><br><span class="line">    <span class="function">String <span class="title">lookup</span><span class="params">()</span> <span class="keyword">default</span> ""</span>;</span><br><span class="line">    <span class="function">Class <span class="title">type</span><span class="params">()</span> <span class="keyword">default</span> java.lang.Object.class</span>;</span><br><span class="line">    <span class="keyword">enum</span> AuthenticationType &#123;</span><br><span class="line">        CONTAINER,</span><br><span class="line">        APPLICATION</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function">AuthenticationType <span class="title">authenticationType</span><span class="params">()</span> <span class="keyword">default</span> AuthenticationType.CONTAINER</span>;</span><br><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">shareable</span><span class="params">()</span> <span class="keyword">default</span> <span class="keyword">true</span></span>;</span><br><span class="line">    <span class="function">String <span class="title">mappedName</span><span class="params">()</span> <span class="keyword">default</span> ""</span>;</span><br><span class="line">    String description <span class="keyword">default</span> <span class="string">""</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p><p>@Resource的作用相当于@Autowired，只不过@Autowired按byType自动注入，而@Resource默认是按照byName自动注入罢了，@Resource有两个属性是比较重要的，分别是name和type。Spring将@Resource注解的name属性解析为bean的名字，而type属性解析为bean的类型。所以如果使用name属性，这使用byName的主动注入策略，而使用type属性时则使用byType自动注入策略，如果既不指定name也不知道type属性，这时将通过反射机制使用byName自动注入策略。</p><blockquote><p>注意：最好是将@Resource放在setter方法上，因为这样更符合面向对象思想，通过set和get去操作属性，而不是直接去操作属性。</p></blockquote><p>@Resource装配顺序：</p><ol><li>如果同时制定了name和type。则从Spring上下文中找到唯一匹配的bean进行装配，找不到则跑异常。</li><li>如果指定了name，这从上下文中查找名称(id)匹配的bean进行装配，找不到则抛出异常。</li><li>如果指定了type，这从上下文中找到类似匹配的唯一bean进行装配，找不到或者找到多个，都会抛出异常。</li><li>如果既没有指定name，也没有指定type，这自动按照byName方式进行装配，如果没有匹配，则回退为一个原始类型进行匹配，如果匹配则自动装配。</li></ol><p>**下面写的都对(既可以写在成员变量中，也可以写在seter方法上)<br><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Resource</span>(type=com.hualala.test.service.UserService.class)</span><br><span class="line">pricate UserService userService;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Resource</span>(name=<span class="string">"userServiceImpl"</span>)</span><br><span class="line"><span class="keyword">private</span> UserService userService;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Resource</span></span><br><span class="line"><span class="keyword">private</span> UserService userService;</span><br></pre></td></tr></table></figure></p><h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><ul><li>@Resouce默认按照名称方式进行bean匹配(byName)，@Autowired默认按照类型进行匹配(byType)</li><li>@Resource(import javax.annotation.Resource)是javase的注解，@Autowired(import org.springframework.beans.factory.annotation.Autowired)是Spring的注解。</li><li>Spring属于第三方，javaee是java自己的东西，使用@Resource可以减少代码和Spring之间的耦合。</li></ul>]]></content>
+    
+    <summary type="html">
+    
+      @Resource和@Autowired都是做bean的注入时使用，其实@Resource并不是Spring的注解，它的包是javax.annotation.Resource。需要导入，但是Spring支持该注解的注入。
+    
+    </summary>
+    
+      <category term="spring" scheme="http://happy518.top/categories/spring/"/>
+    
+    
+      <category term="spring" scheme="http://happy518.top/tags/spring/"/>
+    
+  </entry>
+  
+  <entry>
     <title>字面量，常量和变量之间的区别</title>
     <link href="http://happy518.top/2017/03/02/2017-03-02-%E5%AD%97%E9%9D%A2%E9%87%8F%EF%BC%8C%E5%B8%B8%E9%87%8F%E5%92%8C%E5%8F%98%E9%87%8F%E4%B9%8B%E9%97%B4%E7%9A%84%E5%8C%BA%E5%88%AB/"/>
     <id>http://happy518.top/2017/03/02/2017-03-02-字面量，常量和变量之间的区别/</id>
@@ -460,32 +482,6 @@
     
     
       <category term="Git" scheme="http://happy518.top/tags/Git/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>随便聊聊</title>
-    <link href="http://happy518.top/2017/02/14/2017-02-14-%E9%9A%8F%E4%BE%BF%E8%81%8A%E8%81%8A/"/>
-    <id>http://happy518.top/2017/02/14/2017-02-14-随便聊聊/</id>
-    <published>2017-02-13T16:00:00.000Z</published>
-    <updated>2018-10-31T11:56:30.962Z</updated>
-    
-    <content type="html"><![CDATA[<h1 id="随便谈谈"><a href="#随便谈谈" class="headerlink" title="随便谈谈"></a>随便谈谈</h1><p>今天是情人节，首先祝大家情人节快乐~</p><p>在这特殊的节<strong>日</strong>里，我特意花了半天的时间，我将在简书中的文章都搬到 <a href="http://qiubaiying.github.io" target="_blank" rel="noopener"><strong>BY Blog</strong></a> 上，顺便又修改了下博客框架。</p><h1 id="关于分享"><a href="#关于分享" class="headerlink" title="关于分享"></a>关于分享</h1><p>最近有很多人来请教我关于建站的问题，我都花时间为其解答一一解答。</p><p>感觉在解答别人的问题时，你自己也能学到很多新的知识，同时能沉浸其中。</p><p>我想这就是分享的魔力吧。</p><p>所以，把问题都砸过来吧~</p>]]></content>
-    
-    <summary type="html">
-    
-      2017 情人节快乐~
-    
-    </summary>
-    
-      <category term="漫谈" scheme="http://happy518.top/categories/%E6%BC%AB%E8%B0%88/"/>
-    
-    
-      <category term="生活" scheme="http://happy518.top/tags/%E7%94%9F%E6%B4%BB/"/>
-    
-      <category term="博客" scheme="http://happy518.top/tags/%E5%8D%9A%E5%AE%A2/"/>
-    
-      <category term="漫谈" scheme="http://happy518.top/tags/%E6%BC%AB%E8%B0%88/"/>
     
   </entry>
   
